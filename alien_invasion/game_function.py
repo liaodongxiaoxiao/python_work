@@ -3,6 +3,7 @@ import sys
 import pygame
 from bullet import Bullet
 from alien import Alien
+from time import sleep
 
 
 def check_keydown_event(event, ai_settings, screen, ship, bullets):
@@ -31,7 +32,7 @@ def check_keyup_event(event, ship):
         ship.moving_left = False
 
 
-def check_events(ai_settings, screen, ship, bullets):
+def check_events(ai_settings, screen, stats, play_button, ship, aliens, bullets):
     """响应按键和鼠标"""
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -43,17 +44,58 @@ def check_events(ai_settings, screen, ship, bullets):
         elif event.type == pygame.KEYUP:
             check_keyup_event(event, ship)
 
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_x, mouse_y = pygame.mouse.get_pos()
+            check_play_button(ai_settings, screen, stats, play_button, ship, aliens, bullets, mouse_x, mouse_y)
 
-def update_bullets(bullets):
+
+def check_play_button(ai_settings, screen, stats, play_button, ship, aliens, bullets, mouse_x, mouse_y):
+    """监测开始按钮点击事件"""
+    button_clicked = play_button.rect.collidepoint(mouse_x, mouse_y)
+    if button_clicked and not stats.game_active:
+
+        ai_settings.initialize_dynamic_settings()
+
+        # 隐藏光标
+        pygame.mouse.set_visible(False)
+
+        # 重置游戏状态
+        stats.reset_stats()
+        stats.game_active = True
+
+        # 清空外星人和子弹列表
+        bullets.empty()
+        aliens.empty()
+
+        # 创建一群新的外星人，并让飞船居中
+        create_fleet(ai_settings, screen, ship, aliens)
+        ship.center_ship()
+
+
+def update_bullets(ai_settings, screen, ship, aliens, bullets):
     bullets.update()
     for bullet in bullets.copy():
         if bullet.rect.bottom <= 0:
             bullets.remove(bullet)
+    check_bullet_alien_collistions(ai_settings, screen, ship, aliens, bullets)
 
 
-def update_aliens(ai_settings, aliens):
+def check_bullet_alien_collistions(ai_settings, screen, ship, aliens, bullets):
+    collisions = pygame.sprite.groupcollide(aliens, bullets, True, True)
+    if len(aliens) == 0:
+        bullets.empty()
+        # 加速
+        ai_settings.increase_speed()
+        create_fleet(ai_settings, screen, ship, aliens)
+
+
+def update_aliens(ai_settings, stats, screen, ship, aliens, bullets):
     check_fleet_edges(ai_settings, aliens)
     aliens.update()
+    # 检测外星人和飞船相撞
+    if pygame.sprite.spritecollideany(ship, aliens):
+        ship_hit(ai_settings, stats, screen, ship, aliens, bullets)
+    check_aliens_bottom(ai_settings, stats, screen, ship, aliens, bullets)
 
 
 def check_fleet_edges(ai_settings, aliens):
@@ -70,7 +112,7 @@ def change_fleet_direction(ai_settings, aliens):
     ai_settings.fleet_direction *= -1
 
 
-def update_screen(ai_settings, screen, ship, aliens, bullets):
+def update_screen(ai_settings, screen, stats, ship, aliens, bullets, play_button):
     """更新屏幕上的图像"""
     # 每次循环都重绘屏幕
     screen.fill(ai_settings.bg_color)
@@ -82,6 +124,9 @@ def update_screen(ai_settings, screen, ship, aliens, bullets):
     # 绘制子弹
     for bullet in bullets:
         bullet.draw_bullet()
+
+    if not stats.game_active:
+        play_button.draw_button()
 
     # 让最近绘制的屏幕可见
     pygame.display.flip()
@@ -119,3 +164,30 @@ def create_alien(ai_settings, screen, aliens, alien_number, row_number):
     alien.rect.x = alien.x
     alien.rect.y = alien.rect.height + 2 * alien.rect.height * row_number
     aliens.add(alien)
+
+
+def ship_hit(ai_settings, stats, screen, ship, aliens, bullets):
+    """飞船被撞击"""
+    if stats.ship_left > 0:
+        stats.ship_left -= 1
+
+        aliens.empty()
+        bullets.empty()
+
+        create_fleet(ai_settings, screen, ship, aliens)
+        ship.center_ship()
+
+        sleep(0.5)
+    else:
+        stats.game_active = False
+        # 飞船撞击游戏结束，光标可见
+        pygame.mouse.set_visible(True)
+
+
+def check_aliens_bottom(ai_settings, stats, screen, ship, aliens, bullets):
+    """检查外星人是否到屏幕底部"""
+    screen_rect = screen.get_rect()
+    for alien in aliens.sprites():
+        if alien.rect.bottom >= screen_rect.bottom:
+            ship_hit(ai_settings, stats, screen, ship, aliens, bullets)
+            break
