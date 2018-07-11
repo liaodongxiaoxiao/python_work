@@ -1,4 +1,4 @@
-class GameStats():
+class GameStats:
     """统计游戏状态"""
 
     def __init__(self, ai_settings):
@@ -12,3 +12,4 @@ class GameStats():
         """初始化统计用的参数"""
         self.ship_left = self.ai_settings.ship_limit
         self.score = 0
+        self.level = 1
